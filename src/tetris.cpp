@@ -81,22 +81,35 @@ constexpr array<PieceData, 7> PIECES = {{
 // Collision Check Function
 bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, int pieceY) {
     const PieceData& data = PIECES[type];
+
     for (int r = 0; r < 4; r++) {
         uint16_t row_mask = data.shape[rot][r];
-        if (row_mask == 0) continue;
+        if (row_mask == 0) continue; // Skip empty piece rows
 
         int boardY = pieceY + r;
+
+        // 1. Vertical Out-of-Bounds Check (Floor / Upper Ceiling)
         if (boardY < 0 || boardY >= BOARD_ROW) return true;
 
-        uint16_t shifted = row_mask << pieceX;
+        // 2. Left Wall Collision Check (pieceX < 0)
+        if (pieceX < 0) {
+            // Mask out bits that spill past Column 0 to the left
+            // e.g. if pieceX = -1, check if bit 0 is set: ((1 << 1) - 1) = 0b0001
+            uint16_t left_overflow_mask = (1 << (-pieceX)) - 1;
+            if (row_mask & left_overflow_mask) return true; // Collision!
+        }
 
-        // Wall collision check
+        // 3. Shift Piece Row to Board Column Position
+        uint16_t shifted = (pieceX >= 0) ? (row_mask << pieceX) : (row_mask >> (-pieceX));
+
+        // 4. Right Wall Collision Check (bits spilled past Column 9)
         if (shifted & ~ROW_MASK) return true;
 
-        // Placed minos collision check
+        // 5. Placed Minos Overlap Check
         if (board.rows[boardY] & shifted) return true;
     }
-    return false;
+
+    return false; // Valid placement
 }
 
 // -----------------------------------------------------------------------------
