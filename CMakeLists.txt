@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(raylib REQUIRED)
 
 add_executable(tetris
-    src/main.cpp
+    src/tetris.cpp
 )
 
 target_link_libraries(tetris PRIVATE raylib)
