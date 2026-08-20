@@ -158,13 +158,13 @@ int main() {
         if (IsKeyPressed(KEY_SIX))   { currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0; }
         if (IsKeyPressed(KEY_SEVEN)) { currentPiece = PIECE_Z; pieceX = 3; pieceY = 0; rotation = 0; }
 
-        if (IsKeyPressed(KEY_LEFT)) {
+        if (IsKeyDown(KEY_LEFT)) {
             if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
         }
-        if (IsKeyPressed(KEY_RIGHT)) {
+        if (IsKeyDown(KEY_RIGHT)) {
             if (!is_colliding(board, currentPiece, rotation, pieceX + 1, pieceY)) pieceX++;
         }
-        if (IsKeyPressed(KEY_DOWN)) {
+        if (IsKeyDown(KEY_DOWN)) {
             if (!is_colliding(board, currentPiece, rotation, pieceX, pieceY + 1)) pieceY++;
         }
         if (IsKeyPressed(KEY_UP)) {
