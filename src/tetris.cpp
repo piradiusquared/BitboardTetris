@@ -127,12 +127,12 @@ int main() {
     const int screenWidth = MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 180;
     const int screenHeight = MARGIN_TOP + (20 * CELL_SIZE) + 40; // 20 visible rows + margins
 
-    InitWindow(screenWidth, screenHeight, "Bitboard Tetris - TETR.IO Style Spawning");
+    InitWindow(screenWidth, screenHeight, "Bitboard Tetris");
     SetTargetFPS(60);
 
     BitBoard board;
     // Set test floor at bottom visible row (row 21)
-    board.rows[21] = 0b0011111100;
+    board.rows[21] = 0b0001111000;
 
     // TETR.IO Spawn Parameters:
     // pieceX = 3 centers 3-wide & 4-wide pieces horizontally
