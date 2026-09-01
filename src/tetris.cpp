@@ -15,10 +15,20 @@ struct BitBoard {
     // Row 0..1: Hidden above ceiling
     // Row 2..21: Visible 10x20 board
     array<uint16_t, BOARD_ROW> rows = {0};
+    array<uint16_t, BOARD_COL> cols = {0};
 
     bool is_filled(int col, int row) const {
         if (col < 0 || col >= BOARD_COL || row < 0 || row >= BOARD_ROW) return false;
         return (rows[row] & (1 << col)) != 0;
+    }
+
+    bool is_row_full(int r) const {
+        return rows[r] == 0b1111111111;
+    }
+
+    void reset() {
+        rows = {0};
+        cols = {0};
     }
 };
 
@@ -26,8 +36,26 @@ struct BitBoard {
 // PIECE DEFINITIONS (LSB-First)
 // -----------------------------------------------------------------------------
 enum PieceType {
-    PIECE_I = 0, PIECE_J = 1, PIECE_L = 2,
-    PIECE_O = 3, PIECE_S = 4, PIECE_T = 5, PIECE_Z = 6
+    PIECE_I, 
+    PIECE_J, 
+    PIECE_L,
+    PIECE_O, 
+    PIECE_S, 
+    PIECE_T, 
+    PIECE_Z
+};
+
+const Color PIECE_COLORS[9] = {
+    SKYBLUE,    // 0 = I-Piece
+    BLUE,       // 1 = J-Piece
+    ORANGE,     // 2 = L-Piece
+    YELLOW,     // 3 = O-Piece
+    GREEN,      // 4 = S-Piece
+    PURPLE,     // 5 = T-Piece
+    RED,        // 6 = Z-Piece
+    BLACK,      // 7 = Empty cell
+    GRAY        // 8 = garbage
+
 };
 
 struct PieceData {
@@ -112,6 +140,114 @@ bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, in
     return false; // Valid placement
 }
 
+void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY) {
+    const PieceData& data = PIECES[type];
+
+    int test_y = pieceY;
+    while (!is_colliding(board, type, rot, pieceX, test_y + 1)) {
+        test_y++;
+    }
+
+    for (int r = 0; r < 4; r++) {
+        uint16_t row_mask = data.shape[rot][r];
+        if (row_mask == 0) continue;
+
+        int boardY = test_y + r;
+        if (boardY < 0 || boardY >= BOARD_ROW) continue;
+
+        // 1. Write to BitBoard using Bitwise OR (|=)
+        uint16_t shifted = (pieceX >= 0) ? (row_mask << pieceX) : (row_mask >> (-pieceX));
+        board.rows[boardY] |= shifted;
+
+        // 2. Write to Color Grid (type + 1 stores color IDs 1 to 7)
+        for (int c = 0; c < 4; c++) {
+            if (row_mask & (1 << c)) {
+                int boardX = pieceX + c;
+                if (boardX >= 0 && boardX < BOARD_COL) {
+                    color_board[boardY][boardX] = (uint8_t)(type);
+                }
+            }
+        }
+    }
+}
+
+int clear_lines(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL]) {
+    int lines_cleared = 0;
+
+    // Scan from bottom row (21) up to top row (0)
+    for (int r = BOARD_ROW - 1; r >= 0; r--) {
+        if (board.is_row_full(r)) {
+            lines_cleared++;
+
+            // Shift all rows above 'r' down by 1
+            for (int y = r; y > 0; y--) {
+                // Shift BitBoard row
+                board.rows[y] = board.rows[y - 1];
+
+                // Shift Color Grid row
+                for (int x = 0; x < BOARD_COL; x++) {
+                    color_board[y][x] = color_board[y - 1][x];
+                }
+            }
+
+            // Clear top row (row 0)
+            board.rows[0] = 0;
+            for (int x = 0; x < BOARD_COL; x++) {
+                color_board[0][x] = 0;
+            }
+
+            // Re-check current row index (since a new row shifted down into index 'r')
+            r++; 
+        }
+    }
+
+    return lines_cleared;
+}
+
+// Color ID Constants matching your setup
+constexpr uint8_t EMPTY_COLOR_ID = 7; // Index 7 = BLACK (Empty)
+constexpr uint8_t TEST_COLOR_ID  = 8; // Index 8 = GRAY (For test blocks / floor)
+
+void sync_color_board_from_bitboard(
+    const BitBoard& board, 
+    uint8_t color_board[BOARD_ROW][BOARD_COL],
+    uint8_t default_block_color = TEST_COLOR_ID,
+    uint8_t empty_color = EMPTY_COLOR_ID
+) {
+    for (int r = 0; r < BOARD_ROW; r++) {
+        for (int c = 0; c < BOARD_COL; c++) {
+            if (board.is_filled(c, r)) {
+                // If the bit is filled but has no piece color assigned, set to default block color
+                if (color_board[r][c] == empty_color) {
+                    color_board[r][c] = default_block_color;
+                }
+            } else {
+                // If bit is 0, clear the color to EMPTY
+                color_board[r][c] = empty_color;
+            }
+        }
+    }
+}
+
+void set_test_row(
+    BitBoard& board, 
+    uint8_t color_board[BOARD_ROW][BOARD_COL], 
+    int row, 
+    uint16_t row_mask, 
+    uint8_t color_id = TEST_COLOR_ID
+) {
+    board.rows[row] = row_mask;
+
+    for (int c = 0; c < BOARD_COL; c++) {
+        if (row_mask & (1 << c)) {
+            color_board[row][c] = color_id;
+        } else {
+            color_board[row][c] = EMPTY_COLOR_ID;
+        }
+    }
+}
+
+
 // -----------------------------------------------------------------------------
 // GUI CONSTANTS & HELPERS
 // -----------------------------------------------------------------------------
@@ -131,8 +267,14 @@ int main() {
     SetTargetFPS(60);
 
     BitBoard board;
+    uint8_t color_board[BOARD_ROW][BOARD_COL];
+    // Fill whole color board with 7 (EMPTY / BLACK)
+    for (int r = 0; r < BOARD_ROW; r++) {
+        for (int c = 0; c < BOARD_COL; c++) color_board[r][c] = EMPTY_COLOR_ID;
+    }
     // Set test floor at bottom visible row (row 21)
-    board.rows[21] = 0b0001111000;
+    set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
+
 
     // TETR.IO Spawn Parameters:
     // pieceX = 3 centers 3-wide & 4-wide pieces horizontally
@@ -141,10 +283,6 @@ int main() {
     int pieceX = 3;
     int pieceY = 0; 
     int rotation = 0;
-
-    const Color PIECE_COLORS[7] = {
-        SKYBLUE, BLUE, ORANGE, YELLOW, GREEN, PURPLE, RED
-    };
 
     while (!WindowShouldClose()) {
         // ---------------------------------------------------------------------
@@ -171,6 +309,11 @@ int main() {
             int nextRot = (rotation + 1) % 4;
             if (!is_colliding(board, currentPiece, nextRot, pieceX, pieceY)) rotation = nextRot;
         }
+        if (IsKeyPressed(KEY_SPACE)) {
+            lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
+            int cleared = clear_lines(board, color_board);
+            currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0;
+        }
 
         // ---------------------------------------------------------------------
         // 2. RENDERING
@@ -178,15 +321,18 @@ int main() {
         BeginDrawing();
         ClearBackground(GetColor(0x0C0C0CFF)); // Dark background
 
-        // A. Draw 20 Visible Grid Cells
         for (int row = 2; row < BOARD_ROW; row++) {
             for (int col = 0; col < BOARD_COL; col++) {
                 int px = col_to_px(col);
                 int py = row_to_py(row);
 
-                if (board.is_filled(col, row)) {
-                    DrawRectangle(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2, GRAY);
+                uint8_t color_id = color_board[row][col];
+
+                if (color_id > 0) {
+                    // Draw locked colored block!
+                    DrawRectangle(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2, PIECE_COLORS[color_id]);
                 } else {
+                    // Empty grid outline
                     DrawRectangleLines(px, py, CELL_SIZE, CELL_SIZE, GetColor(0x1F1F1FFF));
                 }
             }
