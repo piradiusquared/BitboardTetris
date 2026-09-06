@@ -1,27 +1,22 @@
 #pragma once
 
-enum PieceType {
-    PIECE_I, 
-    PIECE_J, 
-    PIECE_L,
-    PIECE_O, 
-    PIECE_S, 
-    PIECE_T, 
-    PIECE_Z
-};
+#include <array>
+#include <cstdint.h>
+
+constexpr int BOARD_COL = 10;
+constexpr int BOARD_ROW = 22;
+
+constexpr uint16_t ROW_MASK = 0x03FF;
 
 class BitBoard {
-    array<uint16_t, BOARD_ROW> rows;
-    array<uint16_t, BOARD_COL> cols;
+private:
+    std::array<uint16_t, BOARD_ROW> rows{};
+    std::array<uint16_t, BOARD_COL> cols{};
 
-    uint8_t color_board[BOARD_ROW][BOARD_COL];
+public:
+    bool is_filled(int col, int row) const;
+    bool is_row_full(int row) const;
 
-    public:
-        bool is_filled(int col, int row);
-        bool is_row_full(int row);
-        void reset();
-
-        bool is_colliding(PieceType type, int rot, int pieceX, int pieceY);
-        void lock_piece(uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY);
+    void reset();
 };
 

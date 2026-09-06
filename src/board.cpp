@@ -1,13 +1,15 @@
-#include <stdint.h>
-#include <array>
 #include "board.h"
 
-using namespace std;
+bool BitBoard::is_filled(int col, int row) const {
+    if (col < 0 || col >= BOARD_COL ||
+        row < 0 || row >= BOARD_ROW) {
+        return false;
+    }
 
-constexpr int BOARD_COL = 10;
-constexpr int BOARD_ROW = 22; // Row 0..1 = Hidden Spawn Rows, Row 2..21 = Visible Rows
-constexpr uint16_t ROW_MASK = 0x03FF;
+    return (rows[row] & (1 << col)) != 0;
+}
 
+<<<<<<< HEAD
 class BitBoard {
     // Row 0..1: Hidden above ceiling
     // Row 2..21: Visible 10x20 board
@@ -29,3 +31,13 @@ class BitBoard {
             cols = {0};
         }
 };
+=======
+bool BitBoard::is_row_full(int row) const {
+    return rows[row] == ROW_MASK;
+}
+
+void BitBoard::reset() {
+    rows.fill(0);
+    cols.fill(0);
+}
+>>>>>>> 85c9d7a (Starting refactoring)
