@@ -109,8 +109,42 @@ constexpr array<PieceData, 7> PIECES = {{
 }};
 
 // kick table bullshit
+const int KICKS_STD[8][5][2] = {
+    {{0, 0}, {-1, 0}, {-1, -1}, {0, 2},  {-1, 2}},
+    {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
+    {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
+    {{0, 0}, {-1, 0}, {-1, -1}, {0, 2},  {-1, 2}},
+
+    {{0, 0}, {1, 0},  {1, -1},  {0, 2},  {1, 2}},
+    {{0, 0}, {-1, 0}, {-1, 1},  {0, -2},  {-1, -2}},
+    {{0, 0}, {-1, 0}, {-1, 1},  {0, -2},  {-1, -2}},
+    {{0, 0}, {1, 0},  {1, -1},  {0, 2},  {1, 2}}
+};
+
+const int KICKS_I[8][5][2] = {
+    {{0, 0}, {-2, 0}, {1, 0},   {-2, 1},  {1, -2}},
+    {{0, 0}, {2, 0},  {-1, 0},  {2, -1},  {-1, 2}},
+    {{0, 0}, {-1, 0}, {2, 0},   {-1, -2}, {2, 1}},
+    {{0, 0}, {1, 0},  {-2, -0}, {1, 2},   {-2, -1}},
+
+    {{0, 0}, {2, 0},  {-1, 0},  {2, -1},  {-1, 2}},
+    {{0, 0}, {-2, 0}, {1, 0},   {-2, 1},  {1, -2}},
+    {{0, 0}, {1, 0},  {-2, 0},  {1, 2},   {-2, -1}},
+    {{0, 0}, {-1, 0}, {2, 0},   {-1, -2}, {2, 1}}
+};
+
+const int KICKS_OE[4][5][2] = {
+    {{0, 0}, {0, -1}, {1, -1},  {-1, -1}, {0, 1}},
+    {{0, 0}, {1, 0},  {1, -2},  {1, 1},   {0, -2}},
+    {{0, 0}, {0, 1},  {-1, 1},  {1, 1},   {0, -1}},
+    {{0, 0}, {-1, 0}, {-1, -2}, {-1, 1},  {0, -2}}
+};
+
+bool kick_rotate(const BitBoard& board, PieceType type, int rot, int nextRot, int pieceX, int pieceY) {
 
 
+    return false; // cannot rotate
+}
 
 
 // Collision check and rotation bs
@@ -314,6 +348,11 @@ int main() {
         }
         if (IsKeyPressed(KEY_UP)) {
             int nextRot = (rotation + 1) % 4;
+            if (!is_colliding(board, currentPiece, nextRot, pieceX, pieceY)) rotation = nextRot;
+        }
+        if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+            int r = (rotation - 1) % 4;
+            int nextRot = (r < 0) ? (r + 4) : r;
             if (!is_colliding(board, currentPiece, nextRot, pieceX, pieceY)) rotation = nextRot;
         }
         if (IsKeyPressed(KEY_SPACE)) {
