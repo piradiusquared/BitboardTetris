@@ -1,3 +1,5 @@
+#include <iostream>
+#include <cstdlib>
 #include <cstdint>
 #include <array>
 #include "raylib.h"
@@ -36,10 +38,10 @@ struct BitBoard {
 // PIECE DEFINITIONS (LSB-First)
 // -----------------------------------------------------------------------------
 enum PieceType {
-    PIECE_I, 
+    PIECE_I = 0, 
     PIECE_J, 
     PIECE_L,
-    PIECE_O, 
+    PIECE_O,
     PIECE_S, 
     PIECE_T, 
     PIECE_Z
@@ -106,7 +108,12 @@ constexpr array<PieceData, 7> PIECES = {{
       {0b0010, 0b0011, 0b0001, 0b0000}}}
 }};
 
-// Collision Check Function
+// kick table bullshit
+
+
+
+
+// Collision check and rotation bs
 bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, int pieceY) {
     const PieceData& data = PIECES[type];
 
@@ -159,7 +166,7 @@ void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], Piec
         uint16_t shifted = (pieceX >= 0) ? (row_mask << pieceX) : (row_mask >> (-pieceX));
         board.rows[boardY] |= shifted;
 
-        // 2. Write to Color Grid (type + 1 stores color IDs 1 to 7)
+        // 2. Write to Color Grid
         for (int c = 0; c < 4; c++) {
             if (row_mask & (1 << c)) {
                 int boardX = pieceX + c;
@@ -204,7 +211,7 @@ int clear_lines(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL]) {
     return lines_cleared;
 }
 
-// Color ID Constants matching your setup
+// Color ID shit
 constexpr uint8_t EMPTY_COLOR_ID = 7; // Index 7 = BLACK (Empty)
 constexpr uint8_t TEST_COLOR_ID  = 8; // Index 8 = GRAY (For test blocks / floor)
 
@@ -313,6 +320,10 @@ int main() {
             lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
             int cleared = clear_lines(board, color_board);
             currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0;
+            if (is_colliding(board, currentPiece, rotation, pieceX, pieceY)) {
+                cout << "Game over topped out" << "\n";
+                exit(1);
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -328,7 +339,7 @@ int main() {
 
                 uint8_t color_id = color_board[row][col];
 
-                if (color_id > 0) {
+                if (color_id >= 0) { // 0 is the i piece colour
                     // Draw locked colored block!
                     DrawRectangle(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2, PIECE_COLORS[color_id]);
                 } else {
