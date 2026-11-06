@@ -1,7 +1,7 @@
 #pragma once
 
 #include <array>
-#include <cstdint.h>
+#include <cstdint>
 
 constexpr int BOARD_COL = 10;
 constexpr int BOARD_ROW = 22;
