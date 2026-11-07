@@ -273,7 +273,7 @@ int clear_lines(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL]) {
             // Clear top row (row 0)
             board.rows[0] = 0;
             for (int x = 0; x < BOARD_COL; x++) {
-                color_board[0][x] = 0;
+                color_board[0][x] = 7; //empty colour
             }
 
             // Re-check current row index (since a new row shifted down into index 'r')
@@ -355,10 +355,6 @@ int main() {
     // Set test floor at bottom visible row (row 21)
     set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
 
-
-    // TETR.IO Spawn Parameters:
-    // pieceX = 3 centers 3-wide & 4-wide pieces horizontally
-    // pieceY = 0 places piece in the 2 hidden spawn rows above the ceiling!
     PieceType currentPiece = PIECE_S;
     int pieceX = 3;
     int pieceY = 0; 
@@ -392,6 +388,10 @@ int main() {
         if (IsKeyPressed(KEY_LEFT_SHIFT)) {
             int r = (rotation - 1) % 4;
             int nextRot = (r < 0) ? (r + 4) : r;
+            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
+        }
+        if (IsKeyPressed(KEY_W)) {
+            int nextRot = (rotation + 2) % 4;
             try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
         }
         if (IsKeyPressed(KEY_SPACE)) {
