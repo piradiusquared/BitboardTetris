@@ -108,8 +108,10 @@ constexpr array<PieceData, 7> PIECES = {{
       {0b0010, 0b0011, 0b0001, 0b0000}}}
 }};
 
+struct RotationVec {int x; int y; };
+
 // kick table bullshit
-const int KICKS_STD[8][5][2] = {
+const RotationVec KICKS_STD[8][5] = {
     {{0, 0}, {-1, 0}, {-1, -1}, {0, 2},  {-1, 2}},
     {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
     {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
@@ -122,7 +124,7 @@ const int KICKS_STD[8][5][2] = {
 };
 
 // SRS+ I table
-const int KICKS_I[8][5][2] = {
+const RotationVec KICKS_I[8][5] = {
     {{0, 0}, {1, 0},   {-2, 0}, {-2, -1}, {1, 2}},
     {{0, 0}, {-1, 0},  {2, 0},  {-1, -2}, {2, 1}},
     {{0, 0}, {-1, 0},  {2, 0},  {-1, 2},  {2, -1}},
@@ -134,19 +136,30 @@ const int KICKS_I[8][5][2] = {
     {{0, 0}, {-1, 0}, {-2, 0},  {2, -1},  {-1, 2}}
 };
 
-const int KICKS_OE[4][5][2] = {
+const RotationVec KICKS_OE[4][5] = {
     {{0, 0}, {0, -1}, {1, -1},  {-1, -1}, {0, 1}},
     {{0, 0}, {1, 0},  {1, -2},  {1, 1},   {0, -2}},
     {{0, 0}, {0, 1},  {-1, 1},  {1, 1},   {0, -1}},
     {{0, 0}, {-1, 0}, {-1, -2}, {-1, 1},  {0, -2}}
 };
 
-bool kick_rotate(const BitBoard& board, PieceType type, int rot, int nextRot, int pieceX, int pieceY) {
+int get_rotate_idx(int from, int to) {
+    if (from == 0 && to == 1) return 0;
+    if (from == 1 && to == 0) return 1;
+    if (from == 1 && to == 2) return 2;
+    if (from == 2 && to == 1) return 3;
+    if (from == 2 && to == 3) return 4;
+    if (from == 3 && to == 2) return 5;
+    if (from == 3 && to == 0) return 6;
+    if (from == 0 && to == 3) return 7;
 
+    if (from == 0 && to == 2) return 0;
+    if (from == 1 && to == 3) return 1;
+    if (from == 2 && to == 0) return 2;
+    if (from == 3 && to == 1) return 3;
 
-    return false; // cannot rotate
+    return -1; // shouldnt happen
 }
-
 
 // Collision check and rotation bs
 bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, int pieceY) {
@@ -181,6 +194,31 @@ bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, in
 
     return false; // Valid placement
 }
+
+bool try_rotate(const BitBoard& board, PieceType type, int& rotation, int rotationNext, int& pieceX, int& pieceY) {
+    // O cannot rotate
+    if (type == PIECE_O) {
+        return true;
+    }
+
+    int rotateIdx = get_rotate_idx(rotation, rotationNext);
+    for (int i = 0; i < 5; i++) {
+        RotationVec kick = (type == PIECE_I) ? KICKS_I[rotateIdx][i] : KICKS_STD[rotateIdx][i];
+        
+        int testX = pieceX + kick.x;
+        int testY = pieceY + kick.y;
+
+        if (!is_colliding(board, type, rotationNext, testX, testY)) {
+            pieceX = testX;
+            pieceY = testY;
+            rotation = rotationNext;
+            return true;
+        }
+    }
+
+    return false; // cannot rotate
+}
+
 
 void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY) {
     const PieceData& data = PIECES[type];
@@ -349,12 +387,12 @@ int main() {
         }
         if (IsKeyPressed(KEY_UP)) {
             int nextRot = (rotation + 1) % 4;
-            if (!is_colliding(board, currentPiece, nextRot, pieceX, pieceY)) rotation = nextRot;
+            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
         }
         if (IsKeyPressed(KEY_LEFT_SHIFT)) {
             int r = (rotation - 1) % 4;
             int nextRot = (r < 0) ? (r + 4) : r;
-            if (!is_colliding(board, currentPiece, nextRot, pieceX, pieceY)) rotation = nextRot;
+            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
         }
         if (IsKeyPressed(KEY_SPACE)) {
             lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
