@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <array>
-#include <vector>
+#include <deque>
 #include <time.h>
 #include "raylib.h"
 
@@ -202,10 +202,9 @@ void swap(int *a, int *b) {
     *b = temp;
 }
 
-void fillBag(vector<PieceType> bag) {
+void fillBag(deque<PieceType> *bag) {
     int temp[7] = {0, 1, 2, 3, 4, 5, 6};
 
-    srand(time(NULL));
 
     for (int i = 6; i > 0; i--) {
         int j = rand() % (i + 1);
@@ -213,7 +212,7 @@ void fillBag(vector<PieceType> bag) {
     }
 
     for (int i : temp) {
-        bag.push_back(static_cast<PieceType>(i));
+        bag->push_back((PieceType) i);
     }
 }
 
@@ -230,6 +229,9 @@ int col_to_px(int col) { return MARGIN_LEFT + (col * CELL_SIZE); }
 int row_to_py(int row) { return MARGIN_TOP + ((row - 2) * CELL_SIZE); }
 
 int main() {
+    srand(time(NULL)); // random needed for bag
+
+
     const int screenWidth = MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 180;
     const int screenHeight = MARGIN_TOP + (20 * CELL_SIZE) + 40; // 20 visible rows + margins
 
@@ -245,9 +247,13 @@ int main() {
     // Set test floor at bottom visible row (row 21)
     set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
 
-    vector<PieceType> bag;
+    deque<PieceType> bag;
+    fillBag(&bag);
+    fillBag(&bag);
 
-    PieceType currentPiece = PIECE_S;
+    PieceType currentPiece = bag.front();
+    bag.pop_front();
+
     int pieceX = 3;
     int pieceY = 0; 
     int rotation = 0;
@@ -256,13 +262,14 @@ int main() {
         // ---------------------------------------------------------------------
         // 1. INPUTS
         // ---------------------------------------------------------------------
-        if (IsKeyPressed(KEY_ONE))   { currentPiece = PIECE_I; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_TWO))   { currentPiece = PIECE_J; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_THREE)) { currentPiece = PIECE_L; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_FOUR))  { currentPiece = PIECE_O; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_FIVE))  { currentPiece = PIECE_S; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_SIX))   { currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0; }
-        if (IsKeyPressed(KEY_SEVEN)) { currentPiece = PIECE_Z; pieceX = 3; pieceY = 0; rotation = 0; }
+        // testing 1 to 7 for specific pieces
+        // if (IsKeyPressed(KEY_ONE))   { currentPiece = PIECE_I; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_TWO))   { currentPiece = PIECE_J; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_THREE)) { currentPiece = PIECE_L; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_FOUR))  { currentPiece = PIECE_O; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_FIVE))  { currentPiece = PIECE_S; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_SIX))   { currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0; }
+        // if (IsKeyPressed(KEY_SEVEN)) { currentPiece = PIECE_Z; pieceX = 3; pieceY = 0; rotation = 0; }
 
         if (IsKeyDown(KEY_LEFT)) {
             if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
@@ -289,7 +296,13 @@ int main() {
         if (IsKeyPressed(KEY_SPACE)) {
             lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
             int cleared = clear_lines(board, color_board);
-            currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0;
+
+            if (bag.size() <= 7) {
+                fillBag(&bag);
+            }
+            currentPiece = bag.front();
+            bag.pop_front();
+            pieceX = 3; pieceY = 0; rotation = 0;
             if (is_colliding(board, currentPiece, rotation, pieceX, pieceY)) {
                 cout << "Game over topped out" << "\n";
                 exit(1);
