@@ -2,25 +2,34 @@
 #include <random>
 #include <time.h>
 #include <bits/stdc++.h>
-
+#include <vector>
 
 using namespace std;
 
+void swap(int *a, int *b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
 
 int main() {
     srand(time(NULL));
 
-    vector<int> test = {0, 1, 2, 3, 4, 5, 6};
+    vector<int> out;
 
-    for (int i = test.size() - 1; i >= 0; i--) {
+    int test[7] = {0, 1, 2, 3, 4, 5, 6};
+
+    for (int i = 6; i >= 0; i--) {
         int j = rand() % (i + 1);
-        swap(test[i], test[j]);
+        swap(&test[i], &test[j]);
     }
 
     for (auto i : test) {
+        out.push_back(i);
+    }
+
+    for (int i : out) {
         cout << i << " ";
     }
-    
-
     return 0;
 }

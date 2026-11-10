@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <array>
+#include <vector>
+#include <time.h>
 #include "raylib.h"
 
 #include "board.cpp"
@@ -194,6 +196,27 @@ void set_test_row(
     }
 }
 
+void swap(int *a, int *b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void fillBag(vector<PieceType> bag) {
+    int temp[7] = {0, 1, 2, 3, 4, 5, 6};
+
+    srand(time(NULL));
+
+    for (int i = 6; i > 0; i--) {
+        int j = rand() % (i + 1);
+        swap(&temp[i], &temp[j]);   
+    }
+
+    for (int i : temp) {
+        bag.push_back(static_cast<PieceType>(i));
+    }
+}
+
 
 // -----------------------------------------------------------------------------
 // GUI CONSTANTS & HELPERS
@@ -221,6 +244,8 @@ int main() {
     }
     // Set test floor at bottom visible row (row 21)
     set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
+
+    vector<PieceType> bag;
 
     PieceType currentPiece = PIECE_S;
     int pieceX = 3;
