@@ -4,144 +4,11 @@
 #include <array>
 #include "raylib.h"
 
+#include "board.cpp"
+#include "constants.h"
+
 using namespace std;
-
-// -----------------------------------------------------------------------------
-// CONSTANTS & BITBOARD STRUCT
-// -----------------------------------------------------------------------------
-constexpr int BOARD_COL = 10;
-constexpr int BOARD_ROW = 22; // Row 0..1 = Hidden Spawn Rows, Row 2..21 = Visible Rows
-constexpr uint16_t ROW_MASK = 0x03FF;
-
-struct BitBoard {
-    // Row 0..1: Hidden above ceiling
-    // Row 2..21: Visible 10x20 board
-    array<uint16_t, BOARD_ROW> rows = {0};
-    array<uint16_t, BOARD_COL> cols = {0};
-
-    bool is_filled(int col, int row) const {
-        if (col < 0 || col >= BOARD_COL || row < 0 || row >= BOARD_ROW) return false;
-        return (rows[row] & (1 << col)) != 0;
-    }
-
-    bool is_row_full(int r) const {
-        return rows[r] == 0b1111111111;
-    }
-
-    void reset() {
-        rows = {0};
-        cols = {0};
-    }
-};
-
-// -----------------------------------------------------------------------------
-// PIECE DEFINITIONS (LSB-First)
-// -----------------------------------------------------------------------------
-enum PieceType {
-    PIECE_I = 0, 
-    PIECE_J, 
-    PIECE_L,
-    PIECE_O,
-    PIECE_S, 
-    PIECE_T, 
-    PIECE_Z
-};
-
-const Color PIECE_COLORS[9] = {
-    SKYBLUE,    // 0 = I-Piece
-    BLUE,       // 1 = J-Piece
-    ORANGE,     // 2 = L-Piece
-    YELLOW,     // 3 = O-Piece
-    GREEN,      // 4 = S-Piece
-    PURPLE,     // 5 = T-Piece
-    RED,        // 6 = Z-Piece
-    BLACK,      // 7 = Empty cell
-    GRAY        // 8 = garbage
-
-};
-
-struct PieceData {
-    uint16_t shape[4][4];
-};
-
-constexpr array<PieceData, 7> PIECES = {{
-    // 0. I-PIECE
-    {{{0b0000, 0b1111, 0b0000, 0b0000},
-      {0b0100, 0b0100, 0b0100, 0b0100},
-      {0b0000, 0b0000, 0b1111, 0b0000},
-      {0b0010, 0b0010, 0b0010, 0b0010}}},
-
-    // 1. J-PIECE
-    {{{0b0001, 0b0111, 0b0000, 0b0000},
-      {0b0110, 0b0010, 0b0010, 0b0000},
-      {0b0000, 0b0111, 0b0100, 0b0000},
-      {0b0010, 0b0010, 0b0011, 0b0000}}},
-
-    // 2. L-PIECE
-    {{{0b0100, 0b0111, 0b0000, 0b0000},
-      {0b0010, 0b0010, 0b0110, 0b0000},
-      {0b0000, 0b0111, 0b0001, 0b0000},
-      {0b0011, 0b0010, 0b0010, 0b0000}}},
-
-    // 3. O-PIECE
-    {{{0b0110, 0b0110, 0b0000, 0b0000},
-      {0b0110, 0b0110, 0b0000, 0b0000},
-      {0b0110, 0b0110, 0b0000, 0b0000},
-      {0b0110, 0b0110, 0b0000, 0b0000}}},
-
-    // 4. S-PIECE
-    {{{0b0110, 0b0011, 0b0000, 0b0000},
-      {0b0010, 0b0110, 0b0100, 0b0000},
-      {0b0000, 0b0110, 0b0011, 0b0000},
-      {0b0001, 0b0011, 0b0010, 0b0000}}},
-
-    // 5. T-PIECE
-    {{{0b0010, 0b0111, 0b0000, 0b0000},
-      {0b0010, 0b0110, 0b0010, 0b0000},
-      {0b0000, 0b0111, 0b0010, 0b0000},
-      {0b0010, 0b0011, 0b0010, 0b0000}}},
-
-    // 6. Z-PIECE
-    {{{0b0011, 0b0110, 0b0000, 0b0000},
-      {0b0100, 0b0110, 0b0010, 0b0000},
-      {0b0000, 0b0011, 0b0110, 0b0000},
-      {0b0010, 0b0011, 0b0001, 0b0000}}}
-}};
-
-struct RotationVec {int x; int y; };
-
-// kick table bullshit
-const RotationVec KICKS_STD[8][5] = {
-    {{0, 0}, {-1, 0}, {-1, -1}, {0, 2},  {-1, 2}},
-    {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
-    {{0, 0}, {1, 0},  {1, 1},   {0, -2}, {1, -2}},
-    {{0, 0}, {-1, 0}, {-1, -1}, {0, 2},  {-1, 2}},
-
-    {{0, 0}, {1, 0},  {1, -1},  {0, 2},  {1, 2}},
-    {{0, 0}, {-1, 0}, {-1, 1},  {0, -2},  {-1, -2}},
-    {{0, 0}, {-1, 0}, {-1, 1},  {0, -2},  {-1, -2}},
-    {{0, 0}, {1, 0},  {1, -1},  {0, 2},  {1, 2}}
-};
-
-// SRS+ I table
-const RotationVec KICKS_I[8][5] = {
-    {{0, 0}, {1, 0},   {-2, 0}, {-2, -1}, {1, 2}},
-    {{0, 0}, {-1, 0},  {2, 0},  {-1, -2}, {2, 1}},
-    {{0, 0}, {-1, 0},  {2, 0},  {-1, 2},  {2, -1}},
-    {{0, 0}, {-2, 0},  {1, -0}, {-2, 1},  {1, -2}},
-
-    {{0, 0}, {2, 0},  {-1, 0},  {2, 1},   {-1, -2}},
-    {{0, 0}, {1, 0},  {-2, 0},  {1, 2},   {-2, -1}},
-    {{0, 0}, {1, 0},  {-2, 0},  {1, -2},  {-2, 1}},
-    {{0, 0}, {-1, 0}, {-2, 0},  {2, -1},  {-1, 2}}
-};
-
-const RotationVec KICKS_OE[4][5] = {
-    {{0, 0}, {0, -1}, {1, -1},  {-1, -1}, {0, 1}},
-    {{0, 0}, {1, 0},  {1, -2},  {1, 1},   {0, -2}},
-    {{0, 0}, {0, 1},  {-1, 1},  {1, 1},   {0, -1}},
-    {{0, 0}, {-1, 0}, {-1, -2}, {-1, 1},  {0, -2}}
-};
+using namespace Constants;
 
 int get_rotate_idx(int from, int to) {
     if (from == 0 && to == 1) return 0;
@@ -449,10 +316,7 @@ int main() {
         }
 
         // D. Side Info
-        DrawText("TETR.IO SPAWN TEST", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 20, 16, WHITE);
         DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
-        DrawText("Notice piece floating", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 90, 14, GREEN);
-        DrawText("above top white border!", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 110, 14, GREEN);
 
         EndDrawing();
     }
