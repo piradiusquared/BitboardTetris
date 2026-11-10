@@ -9,6 +9,9 @@ find_package(raylib REQUIRED)
 
 add_executable(tetris
     src/tetris.cpp
+    src/board.cpp
 )
+
+target_include_directories(tetris PRIVATE ./include)
 
 target_link_libraries(tetris PRIVATE raylib)
