@@ -2,7 +2,7 @@
 #include <random>
 #include <time.h>
 #include <bits/stdc++.h>
-#include <vector>
+#include <deque>
 
 using namespace std;
 
@@ -15,7 +15,7 @@ void swap(int *a, int *b) {
 int main() {
     srand(time(NULL));
 
-    vector<int> out;
+    deque<int> out;
 
     int test[7] = {0, 1, 2, 3, 4, 5, 6};
 
@@ -28,8 +28,8 @@ int main() {
         out.push_back(i);
     }
 
-    for (int i : out) {
-        cout << i << " ";
-    }
+    cout << out.front();
+    out.pop_front();
+    cout << out.front();
     return 0;
 }
