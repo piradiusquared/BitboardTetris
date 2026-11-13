@@ -13,6 +13,7 @@ namespace Constants {
 };
 
 enum PieceType {
+    PIECE_N = -1,
     PIECE_I = 0, 
     PIECE_J, 
     PIECE_L,
