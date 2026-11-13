@@ -88,7 +88,6 @@ bool try_rotate(const BitBoard& board, PieceType type, int& rotation, int rotati
     return false; // cannot rotate
 }
 
-
 void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY) {
     const PieceData& data = PIECES[type];
 
@@ -221,18 +220,104 @@ void fillBag(deque<PieceType> *bag) {
 // GUI CONSTANTS & HELPERS
 // -----------------------------------------------------------------------------
 constexpr int CELL_SIZE = 30;
-constexpr int MARGIN_LEFT = 100; // Room on left for stats/HOLD
+constexpr int MARGIN_LEFT = 160; // Room on left for stats/HOLD
 constexpr int MARGIN_TOP = 60;   // 60px (2 cells) space above board for floating spawns!
+
+constexpr int PREVIEW_CELL_SIZE = 22;
+constexpr int BOX_WIDTH = 120;
+constexpr int HEADER_H = 24;
+constexpr int BOX_GAP = 8;
+
 
 // Convert BitBoard row/col to screen coordinates
 int col_to_px(int col) { return MARGIN_LEFT + (col * CELL_SIZE); }
 int row_to_py(int row) { return MARGIN_TOP + ((row - 2) * CELL_SIZE); }
 
+
+void draw_preview_piece(PieceType type, int centerX, int centerY, int cellSize, Color color) {
+    const PieceData &data = PIECES[type];
+
+    // 1. Find the tight bounding box of the piece in spawn rotation (0°)
+    int minC = 4, maxC = -1, minR = 4, maxR = -1;
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 4; c++) {
+            if (data.shape[0][r] & (1 << c)) {
+                if (c < minC) minC = c;
+                if (c > maxC) maxC = c;
+                if (r < minR) minR = r;
+                if (r > maxR) maxR = r;
+            }
+        }
+    }
+
+    // 2. Calculate pixel width/height and top-left start position
+    int widthPx  = (maxC - minC + 1) * cellSize;
+    int heightPx = (maxR - minR + 1) * cellSize;
+    int startX   = centerX - (widthPx / 2);
+    int startY   = centerY - (heightPx / 2);
+
+    // 3. Draw minos
+    for (int r = minR; r <= maxR; r++) {
+        for (int c = minC; c <= maxC; c++) {
+            if (data.shape[0][r] & (1 << c)) {
+                int px = startX + (c - minC) * cellSize;
+                int py = startY + (r - minR) * cellSize;
+                DrawRectangle(px + 1, py + 1, cellSize - 2, cellSize - 2, color);
+            }
+        }
+    }
+}
+
+void draw_hold_box(PieceType holdPiece, int boardLeft, int boardTop, const Color colors[]) {
+    int x = boardLeft - BOX_WIDTH - BOX_GAP;
+    int y = boardTop;
+    int bodyH = 86;
+    int totalH = HEADER_H + bodyH;
+
+    // Background & White Header
+    DrawRectangle(x, y, BOX_WIDTH, totalH, BLACK);
+    DrawRectangle(x, y, BOX_WIDTH, HEADER_H, WHITE);
+    DrawText("HOLD", x + 8, y + 4, 18, BLACK);
+
+    // White Border
+    DrawRectangleLinesEx(Rectangle{ (float)x, (float)y, (float)BOX_WIDTH, (float)totalH }, 2.0f, WHITE);
+
+    // Draw held piece if one exists (-1 means empty)
+    if (holdPiece >= 0 && holdPiece < 7) {
+        int centerX = x + (BOX_WIDTH / 2);
+        int centerY = y + HEADER_H + (bodyH / 2);
+        draw_preview_piece(holdPiece, centerX, centerY, PREVIEW_CELL_SIZE, colors[holdPiece]);
+    }
+}
+
+void draw_next_box(deque<PieceType> nextQueue, int boardRight, int boardTop, const Color colors[]) {
+    int x = boardRight + BOX_GAP;
+    int y = boardTop;
+    int slotH  = 80; // Vertical height per preview piece
+    int totalH = HEADER_H + (slotH * 5);
+
+    // Background & White Header
+    DrawRectangle(x, y, BOX_WIDTH, totalH, BLACK);
+    DrawRectangle(x, y, BOX_WIDTH, HEADER_H, WHITE);
+    DrawText("NEXT", x + 8, y + 4, 18, BLACK);
+
+    // White Border
+    DrawRectangleLinesEx(Rectangle{ (float)x, (float)y, (float)BOX_WIDTH, (float)totalH }, 2.0f, WHITE);
+
+    // Draw all 5 upcoming pieces
+    int centerX = x + (BOX_WIDTH / 2);
+    for (int i = 0; i < 5; i++) {
+        int centerY = y + HEADER_H + (i * slotH) + (slotH / 2);
+        draw_preview_piece(nextQueue[i], centerX, centerY, PREVIEW_CELL_SIZE, colors[nextQueue[i]]);
+    }
+}
+
+
 int main() {
     srand(time(NULL)); // random needed for bag
 
 
-    const int screenWidth = MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 180;
+    const int screenWidth = MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + BOX_GAP + BOX_WIDTH + 32;
     const int screenHeight = MARGIN_TOP + (20 * CELL_SIZE) + 40; // 20 visible rows + margins
 
     InitWindow(screenWidth, screenHeight, "Bitboard Tetris");
@@ -246,6 +331,9 @@ int main() {
     }
     // Set test floor at bottom visible row (row 21)
     set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
+
+    PieceType holdPiece = PIECE_N; // use int now for negatives
+    bool canHold = true; // TODO: 
 
     deque<PieceType> bag;
     fillBag(&bag);
@@ -314,6 +402,13 @@ int main() {
         // ---------------------------------------------------------------------
         BeginDrawing();
         ClearBackground(GetColor(0x0C0C0CFF)); // Dark background
+
+        int boardRight = MARGIN_LEFT + (BOARD_COL * CELL_SIZE);
+
+        draw_hold_box(holdPiece, MARGIN_LEFT, MARGIN_TOP, PIECE_COLORS);
+        draw_next_box(bag, boardRight, MARGIN_TOP, PIECE_COLORS);
+
+
 
         for (int row = 2; row < BOARD_ROW; row++) {
             for (int col = 0; col < BOARD_COL; col++) {
