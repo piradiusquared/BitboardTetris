@@ -320,8 +320,15 @@ int main() {
     const int screenWidth = MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + BOX_GAP + BOX_WIDTH + 32;
     const int screenHeight = MARGIN_TOP + (20 * CELL_SIZE) + 40; // 20 visible rows + margins
 
+    // Raylib config
+
     InitWindow(screenWidth, screenHeight, "Bitboard Tetris");
+    SetExitKey(KEY_NULL);
     SetTargetFPS(60);
+
+    bool isPaused = false;
+    
+    // Tetris setup
 
     BitBoard board;
     uint8_t color_board[BOARD_ROW][BOARD_COL];
@@ -359,62 +366,67 @@ int main() {
         // if (IsKeyPressed(KEY_SIX))   { currentPiece = PIECE_T; pieceX = 3; pieceY = 0; rotation = 0; }
         // if (IsKeyPressed(KEY_SEVEN)) { currentPiece = PIECE_Z; pieceX = 3; pieceY = 0; rotation = 0; }
 
-        if (IsKeyDown(KEY_LEFT)) {
-            if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            isPaused = !isPaused;
         }
-        if (IsKeyDown(KEY_RIGHT)) {
-            if (!is_colliding(board, currentPiece, rotation, pieceX + 1, pieceY)) pieceX++;
-        }
-        if (IsKeyDown(KEY_DOWN)) {
-            if (!is_colliding(board, currentPiece, rotation, pieceX, pieceY + 1)) pieceY++;
-        }
-        if (IsKeyPressed(KEY_UP)) {
-            int nextRot = (rotation + 1) % 4;
-            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
-        }
-        if (IsKeyPressed(KEY_LEFT_SHIFT)) {
-            int r = (rotation - 1) % 4;
-            int nextRot = (r < 0) ? (r + 4) : r;
-            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
-        }
-        if (IsKeyPressed(KEY_W)) {
-            int nextRot = (rotation + 2) % 4;
-            try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
-        }
-        if (IsKeyPressed(KEY_SPACE)) {
-            lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
-            canHold = true;
 
-
-            int cleared = clear_lines(board, color_board);
-
-            if (bag.size() <= 7) {
-                fillBag(&bag);
+        if (!isPaused) {
+            if (IsKeyDown(KEY_LEFT)) {
+                if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
             }
-            currentPiece = bag.front();
-            bag.pop_front();
-            pieceX = 3; pieceY = 0; rotation = 0;
-            if (is_colliding(board, currentPiece, rotation, pieceX, pieceY)) {
-                cout << "Game over topped out" << "\n";
-                exit(1);
+            if (IsKeyDown(KEY_RIGHT)) {
+                if (!is_colliding(board, currentPiece, rotation, pieceX + 1, pieceY)) pieceX++;
             }
-        }
+            if (IsKeyDown(KEY_DOWN)) {
+                if (!is_colliding(board, currentPiece, rotation, pieceX, pieceY + 1)) pieceY++;
+            }
+            if (IsKeyPressed(KEY_UP)) {
+                int nextRot = (rotation + 1) % 4;
+                try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
+            }
+            if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+                int r = (rotation - 1) % 4;
+                int nextRot = (r < 0) ? (r + 4) : r;
+                try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
+            }
+            if (IsKeyPressed(KEY_W)) {
+                int nextRot = (rotation + 2) % 4;
+                try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
+            }
+            if (IsKeyPressed(KEY_SPACE)) {
+                lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
+                canHold = true;
+                int cleared = clear_lines(board, color_board);
 
-        if (IsKeyPressed(KEY_A)) {
-            if (canHold) {
-                if (holdPiece == PIECE_N) {
-                    holdPiece = currentPiece;
-                    currentPiece = bag.front();
-                    bag.pop_front();
-                } else {
-                    PieceType temp = currentPiece;
-                    currentPiece = holdPiece;
-                    holdPiece = temp;
+                if (bag.size() <= 7) {
+                    fillBag(&bag);
                 }
+                currentPiece = bag.front();
+                bag.pop_front();
                 pieceX = 3; pieceY = 0; rotation = 0;
-                canHold = false;
+                if (is_colliding(board, currentPiece, rotation, pieceX, pieceY)) {
+                    cout << "Game over topped out" << "\n";
+                    exit(1);
+                }
+            }
+
+            if (IsKeyPressed(KEY_A)) {
+                if (canHold) {
+                    if (holdPiece == PIECE_N) {
+                        holdPiece = currentPiece;
+                        currentPiece = bag.front();
+                        bag.pop_front();
+                    } else {
+                        PieceType temp = currentPiece;
+                        currentPiece = holdPiece;
+                        holdPiece = temp;
+                    }
+                    pieceX = 3; pieceY = 0; rotation = 0;
+                    canHold = false;
+                }
             }
         }
+
 
         // ---------------------------------------------------------------------
         // 2. RENDERING
@@ -426,8 +438,6 @@ int main() {
 
         draw_hold_box(holdPiece, MARGIN_LEFT, MARGIN_TOP, PIECE_COLORS);
         draw_next_box(bag, boardRight, MARGIN_TOP, PIECE_COLORS);
-
-
 
         for (int row = 2; row < BOARD_ROW; row++) {
             for (int col = 0; col < BOARD_COL; col++) {
@@ -468,8 +478,21 @@ int main() {
         }
 
         // D. Side Info
-        DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
+        // DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
 
+
+        if (isPaused) {
+            DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.75f));
+
+            const char* title = "PAUSED";
+            int titleWidth = MeasureText(title, 40);
+            DrawText(title, (screenWidth - titleWidth) / 2, (screenHeight / 2) - 30, 40, WHITE);
+
+            const char* hint = "Press ESC to Resume";
+            int hintWidth = MeasureText(hint, 18);
+            DrawText(hint, (screenWidth - hintWidth) / 2, (screenHeight / 2) + 20, 18, LIGHTGRAY);
+        }
+        
         EndDrawing();
     }
 
