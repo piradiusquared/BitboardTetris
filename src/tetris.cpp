@@ -333,7 +333,7 @@ int main() {
     set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
 
     PieceType holdPiece = PIECE_N; // use int now for negatives
-    bool canHold = true; // TODO: 
+    bool canHold = true;
 
     deque<PieceType> bag;
     fillBag(&bag);
@@ -383,6 +383,9 @@ int main() {
         }
         if (IsKeyPressed(KEY_SPACE)) {
             lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
+            canHold = true;
+
+
             int cleared = clear_lines(board, color_board);
 
             if (bag.size() <= 7) {
@@ -394,6 +397,22 @@ int main() {
             if (is_colliding(board, currentPiece, rotation, pieceX, pieceY)) {
                 cout << "Game over topped out" << "\n";
                 exit(1);
+            }
+        }
+
+        if (IsKeyPressed(KEY_A)) {
+            if (canHold) {
+                if (holdPiece == PIECE_N) {
+                    holdPiece = currentPiece;
+                    currentPiece = bag.front();
+                    bag.pop_front();
+                } else {
+                    PieceType temp = currentPiece;
+                    currentPiece = holdPiece;
+                    holdPiece = temp;
+                }
+                pieceX = 3; pieceY = 0; rotation = 0;
+                canHold = false;
             }
         }
 
