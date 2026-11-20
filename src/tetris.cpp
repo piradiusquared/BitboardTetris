@@ -88,13 +88,19 @@ bool try_rotate(const BitBoard& board, PieceType type, int& rotation, int rotati
     return false; // cannot rotate
 }
 
-void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY) {
-    const PieceData& data = PIECES[type];
-
+int get_drop_y(BitBoard& board, PieceType type, int rot, int pieceX, int pieceY) {
     int test_y = pieceY;
     while (!is_colliding(board, type, rot, pieceX, test_y + 1)) {
         test_y++;
     }
+
+    return test_y;
+}
+
+void lock_piece(BitBoard& board, uint8_t color_board[BOARD_ROW][BOARD_COL], PieceType type, int rot, int pieceX, int pieceY) {
+    const PieceData& data = PIECES[type];
+
+    int test_y = get_drop_y(board, type, rot, pieceX, pieceY);
 
     for (int r = 0; r < 4; r++) {
         uint16_t row_mask = data.shape[rot][r];
@@ -464,18 +470,22 @@ int main() {
 
         // C. Draw Active Falling Piece (Includes minos floating ABOVE MARGIN_TOP!)
         const PieceData& activeData = PIECES[currentPiece];
+        int ghostY = get_drop_y(board, currentPiece, rotation, pieceX, pieceY);
         for (int r = 0; r < 4; r++) {
             uint16_t row_mask = activeData.shape[rotation][r];
             for (int c = 0; c < 4; c++) {
                 if (row_mask & (1 << c)) {
                     int drawX = col_to_px(pieceX + c);
                     int drawY = row_to_py(pieceY + r);
+                    int drawGhost = row_to_py(ghostY + r);
 
                     // Draw piece mino (will render above MARGIN_TOP if pieceY + r < 2)
                     DrawRectangle(drawX + 1, drawY + 1, CELL_SIZE - 2, CELL_SIZE - 2, PIECE_COLORS[currentPiece]);
+                    DrawRectangle(drawX + 1, drawGhost + 1, CELL_SIZE - 2, CELL_SIZE - 2, Fade(PIECE_COLORS[currentPiece], 0.25f));
                 }
             }
         }
+
 
         // D. Side Info
         // DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
