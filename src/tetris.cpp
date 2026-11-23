@@ -4,6 +4,8 @@
 #include <array>
 #include <deque>
 #include <time.h>
+#include <algorithm>
+#include <cmath>
 #include "raylib.h"
 
 #include "board.cpp"
@@ -222,6 +224,172 @@ void fillBag(deque<PieceType> *bag) {
 }
 
 
+// garbage logic
+struct GarbagePacket {
+    int lines;
+    int hole_col;
+    float delayTimer;
+};
+
+struct AttackStatePlayer {
+    int combo = -1;
+    int b2bCount = 0;
+    deque<GarbagePacket> incGarbage;
+};
+
+void update_garbage_timers(AttackStatePlayer& state, float dt) {
+    for (auto& packet : state.incGarbage) {
+        if (packet.delayTimer > 0.0f) {
+            packet.delayTimer = max(0.0f, packet.delayTimer - dt);
+        }
+    }
+}
+
+int calculate_attack(AttackStatePlayer& state, int linesCleared, bool isSpin, bool isMini, bool isAllClear) {
+    if (linesCleared == 0) {
+        // Breaking B2B? If you want TETR.IO S2 Surge, release surge here if state.b2bChain >= 3
+        state.combo = -1;
+        if (state.b2bCount >= 4) {
+            return state.b2bCount;            
+        }
+        return 0;
+    }
+
+    state.combo++;
+    bool b2bEligible = (linesCleared == 4) || isSpin || isAllClear;
+
+    // 1. Base Attack Table
+    int base = 0;
+    if (isSpin) {
+        if (isMini) {
+            base = (linesCleared == 2) ? 1 : 0; // Mini Single=0, Mini Double=1
+        } else {
+            if (linesCleared == 1) base = 2;      // TSS
+            else if (linesCleared == 2) base = 4; // TSD
+            else if (linesCleared == 3) base = 6; // TST
+        }
+    } else {
+        if (linesCleared == 1) base = 0;      // Single
+        else if (linesCleared == 2) base = 1; // Double
+        else if (linesCleared == 3) base = 2; // Triple
+        else if (linesCleared == 4) base = 4; // Quad
+    }
+
+    // 2. Back-to-Back Bonus (+1 when chaining)
+    int surgeBonus = 0;
+    if (b2bEligible) {
+        state.b2bCount++;
+        if (state.b2bCount >= 2) {
+            base += 1; // Standard +1 B2B bonus
+        }
+    } else {
+        // Normal Single/Double/Triple breaks B2B (release TETR.IO S2 Surge if chain >= 3)
+        if (state.b2bCount >= 3) {
+            surgeBonus = state.b2bCount;
+        }
+        state.b2bCount = 0;
+    }
+
+    // 3. TETR.IO Combo Multiplier
+    int totalAttack = 0;
+    if (base == 0) {
+        // Singles use a gentle logarithmic scale during combos
+        totalAttack = (int)floor(log1p(1.25 * state.combo));
+    } else {
+        float multiplier = 1.0f + (0.25f * state.combo);
+        totalAttack = (int)floor(base * multiplier);
+    }
+
+    // 4. Add Surge & Perfect Clear Bonus
+    totalAttack += surgeBonus;
+    if (isAllClear) {
+        totalAttack += 5; // TETR.IO S2 All Clear bonus
+    }
+
+    return totalAttack;
+}
+
+void push_garbage_lines(
+    BitBoard& board, 
+    uint8_t color_board[BOARD_ROW][BOARD_COL], 
+    int count, 
+    int hole_col, 
+    uint8_t garbage_color_id = TEST_COLOR_ID
+) {
+    for (int i = 0; i < count; i++) {
+        // 1. Shift all rows UPWARDS (towards row 0 ceiling)
+        for (int r = 0; r < BOARD_ROW - 1; r++) {
+            board.rows[r] = board.rows[r + 1];
+            for (int c = 0; c < BOARD_COL; c++) {
+                color_board[r][c] = color_board[r + 1][c];
+            }
+        }
+
+        // 2. Generate Bitmask for 9 filled blocks + 1 hole at hole_col
+        // Example: hole_col = 3 -> 0b1111110111
+        uint16_t garbage_mask = ROW_MASK & ~(1 << hole_col);
+        board.rows[BOARD_ROW - 1] = garbage_mask;
+
+        // 3. Assign GRAY color to garbage row (leaving hole_col empty)
+        for (int c = 0; c < BOARD_COL; c++) {
+            if (c == hole_col) {
+                color_board[BOARD_ROW - 1][c] = EMPTY_COLOR_ID; // 7 (Black)
+            } else {
+                color_board[BOARD_ROW - 1][c] = garbage_color_id; // GRAY
+            }
+        }
+    }
+}
+
+void resolve_garbage_and_attack(
+    BitBoard& myBoard,
+    uint8_t myColors[BOARD_ROW][BOARD_COL],
+    AttackStatePlayer& myState,
+    AttackStatePlayer& opponentState,
+    int linesCleared,
+    int attackGenerated
+) {
+    if (linesCleared > 0) {
+        // 1. Cancel our own incoming garbage first (FIFO)
+        while (attackGenerated > 0 && !myState.incGarbage.empty()) {
+            GarbagePacket& front = myState.incGarbage.front();
+            if (attackGenerated >= front.lines) {
+                attackGenerated -= front.lines;
+                myState.incGarbage.pop_front();
+            } else {
+                front.lines -= attackGenerated;
+                attackGenerated = 0;
+            }
+        }
+
+        // 2. Send leftover lines to opponent as ONE clean packet (shared hole_col)
+        if (attackGenerated > 0) {
+            int hole = rand() % BOARD_COL;
+            opponentState.incGarbage.push_back({ attackGenerated, hole, 0.5f });
+        }
+    } else {
+        // No lines cleared -> Tank ready garbage up to the 8-line per-piece cap!
+        int capRemaining = 8;
+
+        while (capRemaining > 0 && !myState.incGarbage.empty()) {
+            GarbagePacket& front = myState.incGarbage.front();
+
+            // Stop if the front packet is still traveling in the buffer
+            if (front.delayTimer > 0.0f) break;
+
+            int linesToTank = min(front.lines, capRemaining);
+            push_garbage_lines(myBoard, myColors, linesToTank, front.hole_col);
+
+            front.lines -= linesToTank;
+            capRemaining -= linesToTank;
+
+            if (front.lines == 0) {
+                myState.incGarbage.pop_front();
+            }
+        }
+    }
+}
+
 // -----------------------------------------------------------------------------
 // GUI CONSTANTS & HELPERS
 // -----------------------------------------------------------------------------
@@ -232,7 +400,7 @@ constexpr int MARGIN_TOP = 60;   // 60px (2 cells) space above board for floatin
 constexpr int PREVIEW_CELL_SIZE = 22;
 constexpr int BOX_WIDTH = 120;
 constexpr int HEADER_H = 24;
-constexpr int BOX_GAP = 8;
+constexpr int BOX_GAP = 16;
 
 
 // Convert BitBoard row/col to screen coordinates
@@ -318,6 +486,39 @@ void draw_next_box(deque<PieceType> nextQueue, int boardRight, int boardTop, con
     }
 }
 
+bool is_board_empty(const BitBoard& board) {
+    for (int r = 0; r < BOARD_ROW; r++) {
+        if (board.rows[r] != 0) return false;
+    }
+    return true;
+}
+
+void draw_garbage_meter(const AttackStatePlayer& state, int boardLeft, int boardTop) {
+    int barW = 8;
+    int barX = boardLeft - barW - 4; // Sits 4px to the left of the board border
+    int boardBottom = boardTop + (20 * CELL_SIZE);
+
+    // Draw dark background track for the meter
+    DrawRectangle(barX, boardTop, barW, 20 * CELL_SIZE, GetColor(0x181818FF));
+
+    // Draw packets stacking from bottom to top
+    int currentY = boardBottom;
+    for (const auto& packet : state.incGarbage) {
+        int packetHeight = packet.lines * CELL_SIZE;
+
+        // Clamp so the bar doesn't draw above the top of the board
+        if (currentY - packetHeight < boardTop) {
+            packetHeight = currentY - boardTop;
+        }
+        if (packetHeight <= 0) break;
+
+        // Traveling garbage = dim Orange/Red; Ready to enter = bright Red
+        Color barColor = (packet.delayTimer > 0.0f) ? Fade(ORANGE, 0.7f) : RED;
+
+        DrawRectangle(barX, currentY - packetHeight, barW, packetHeight - 2, barColor);
+        currentY -= packetHeight;
+    }
+}
 
 int main() {
     srand(time(NULL)); // random needed for bag
@@ -359,6 +560,9 @@ int main() {
     int pieceY = 0; 
     int rotation = 0;
 
+    AttackStatePlayer playerState;
+    AttackStatePlayer opponentState;
+
     while (!WindowShouldClose()) {
         // ---------------------------------------------------------------------
         // 1. INPUTS
@@ -377,6 +581,29 @@ int main() {
         }
 
         if (!isPaused) {
+            // garbage testing
+            float dt = min(GetFrameTime(), 0.05f);
+            update_garbage_timers(playerState, dt);
+
+            if (IsKeyPressed(KEY_G)) {
+                playerState.incGarbage.push_back({ 4, rand() % BOARD_COL, 0.5f});
+            }
+            if (IsKeyPressed(KEY_H)) {
+                // Send 10 clean lines (great for testing the 8-line per-piece cap!)
+                playerState.incGarbage.push_back({ 10, rand() % BOARD_COL, 0.5f });
+            }
+            if (IsKeyPressed(KEY_R)) {
+                // Quick board & state reset if you top out while testing
+                board.rows.fill(0);
+                for (int r = 0; r < BOARD_ROW; r++)
+                    for (int c = 0; c < BOARD_COL; c++) color_board[r][c] = EMPTY_COLOR_ID;
+                playerState = AttackStatePlayer{};
+                opponentState = AttackStatePlayer{};
+            }
+
+
+
+
             if (IsKeyDown(KEY_LEFT)) {
                 if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
             }
@@ -402,7 +629,14 @@ int main() {
             if (IsKeyPressed(KEY_SPACE)) {
                 lock_piece(board, color_board, currentPiece, rotation, pieceX, pieceY);
                 canHold = true;
+                
                 int cleared = clear_lines(board, color_board);
+                bool allClear = is_board_empty(board);
+                bool isSpin = false;
+                bool isMini = false;
+
+                int attack = calculate_attack(playerState, cleared, isSpin, isMini, allClear);
+                resolve_garbage_and_attack(board, color_board, playerState, opponentState, cleared, attack);
 
                 if (bag.size() <= 7) {
                     fillBag(&bag);
@@ -431,6 +665,7 @@ int main() {
                     canHold = false;
                 }
             }
+
         }
 
 
@@ -444,6 +679,7 @@ int main() {
 
         draw_hold_box(holdPiece, MARGIN_LEFT, MARGIN_TOP, PIECE_COLORS);
         draw_next_box(bag, boardRight, MARGIN_TOP, PIECE_COLORS);
+        draw_garbage_meter(playerState, MARGIN_LEFT, MARGIN_TOP);
 
         for (int row = 2; row < BOARD_ROW; row++) {
             for (int col = 0; col < BOARD_COL; col++) {
@@ -489,7 +725,15 @@ int main() {
 
         // D. Side Info
         // DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
+        int totalSent = 0;
+        for (const auto& p : opponentState.incGarbage) totalSent += p.lines;
 
+        // Draw live stats below the Hold box
+        int statX = MARGIN_LEFT - BOX_WIDTH - BOX_GAP;
+        int statY = MARGIN_TOP + 140;
+        DrawText(TextFormat("COMBO: %d", max(0, playerState.combo)), statX, statY, 16, WHITE);
+        DrawText(TextFormat("B2B: %d", playerState.b2bCount), statX, statY + 25, 16, GOLD);
+        DrawText(TextFormat("SENT: %d", totalSent), statX, statY + 50, 16, SKYBLUE);
 
         if (isPaused) {
             DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.75f));
