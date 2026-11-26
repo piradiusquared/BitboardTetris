@@ -1,4 +1,3 @@
-cmake -S . -B build
-cmake --build build
+# Javascript reference
 
-cbuild alias
+- Previous version of modern Tetris written in javascript. Used as a reference for c++ development
