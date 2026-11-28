@@ -42,10 +42,10 @@ bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, in
 
         int boardY = pieceY + r;
 
-        // 1. Vertical Out-of-Bounds Check (Floor / Upper Ceiling)
+        // Vertical Out-of-Bounds Check (Floor / Upper Ceiling)
         if (boardY < 0 || boardY >= BOARD_ROW) return true;
 
-        // 2. Left Wall Collision Check (pieceX < 0)
+        // Left Wall Collision Check (pieceX < 0)
         if (pieceX < 0) {
             // Mask out bits that spill past Column 0 to the left
             // e.g. if pieceX = -1, check if bit 0 is set: ((1 << 1) - 1) = 0b0001
@@ -53,13 +53,13 @@ bool is_colliding(const BitBoard& board, PieceType type, int rot, int pieceX, in
             if (row_mask & left_overflow_mask) return true; // Collision!
         }
 
-        // 3. Shift Piece Row to Board Column Position
+        // Shift Piece Row to Board Column Position
         uint16_t shifted = (pieceX >= 0) ? (row_mask << pieceX) : (row_mask >> (-pieceX));
 
-        // 4. Right Wall Collision Check (bits spilled past Column 9)
+        // Right Wall Collision Check (bits spilled past Column 9)
         if (shifted & ~ROW_MASK) return true;
 
-        // 5. Placed Minos Overlap Check
+        // Placed Minos Overlap Check
         if (board.rows[boardY] & shifted) return true;
     }
 
@@ -185,23 +185,23 @@ void sync_color_board_from_bitboard(
     }
 }
 
-void set_test_row(
-    BitBoard& board, 
-    uint8_t color_board[BOARD_ROW][BOARD_COL], 
-    int row, 
-    uint16_t row_mask, 
-    uint8_t color_id = TEST_COLOR_ID
-) {
-    board.rows[row] = row_mask;
+// void set_test_row(
+//     BitBoard& board, 
+//     uint8_t color_board[BOARD_ROW][BOARD_COL], 
+//     int row, 
+//     uint16_t row_mask, 
+//     uint8_t color_id = TEST_COLOR_ID
+// ) {
+//     board.rows[row] = row_mask;
 
-    for (int c = 0; c < BOARD_COL; c++) {
-        if (row_mask & (1 << c)) {
-            color_board[row][c] = color_id;
-        } else {
-            color_board[row][c] = EMPTY_COLOR_ID;
-        }
-    }
-}
+//     for (int c = 0; c < BOARD_COL; c++) {
+//         if (row_mask & (1 << c)) {
+//             color_board[row][c] = color_id;
+//         } else {
+//             color_board[row][c] = EMPTY_COLOR_ID;
+//         }
+//     }
+// }
 
 void swap(int *a, int *b) {
     int temp = *a;
@@ -275,7 +275,7 @@ int calculate_attack(AttackStatePlayer& state, int linesCleared, bool isSpin, bo
         else if (linesCleared == 4) base = 4; // Quad
     }
 
-    // 2. Back-to-Back Bonus (+1 when chaining)
+    // Back-to-Back Bonus (+1 when chaining)
     int surgeBonus = 0;
     if (b2bEligible) {
         state.b2bCount++;
@@ -290,7 +290,7 @@ int calculate_attack(AttackStatePlayer& state, int linesCleared, bool isSpin, bo
         state.b2bCount = 0;
     }
 
-    // 3. TETR.IO Combo Multiplier
+    // Combo Multiplier
     int totalAttack = 0;
     if (base == 0) {
         // Singles use a gentle logarithmic scale during combos
@@ -300,7 +300,7 @@ int calculate_attack(AttackStatePlayer& state, int linesCleared, bool isSpin, bo
         totalAttack = (int)floor(base * multiplier);
     }
 
-    // 4. Add Surge & Perfect Clear Bonus
+    // Add Surge & Perfect Clear Bonus
     totalAttack += surgeBonus;
     if (isAllClear) {
         totalAttack += 5; // TETR.IO S2 All Clear bonus
@@ -317,7 +317,7 @@ void push_garbage_lines(
     uint8_t garbage_color_id = TEST_COLOR_ID
 ) {
     for (int i = 0; i < count; i++) {
-        // 1. Shift all rows UPWARDS (towards row 0 ceiling)
+        // Shift all rows UPWARDS (towards row 0 ceiling)
         for (int r = 0; r < BOARD_ROW - 1; r++) {
             board.rows[r] = board.rows[r + 1];
             for (int c = 0; c < BOARD_COL; c++) {
@@ -325,12 +325,11 @@ void push_garbage_lines(
             }
         }
 
-        // 2. Generate Bitmask for 9 filled blocks + 1 hole at hole_col
-        // Example: hole_col = 3 -> 0b1111110111
+        // Generate Bitmask for 9 filled blocks + 1 hole at hole_col
         uint16_t garbage_mask = ROW_MASK & ~(1 << hole_col);
         board.rows[BOARD_ROW - 1] = garbage_mask;
 
-        // 3. Assign GRAY color to garbage row (leaving hole_col empty)
+        // Assign GRAY color to garbage row (leaving hole_col empty)
         for (int c = 0; c < BOARD_COL; c++) {
             if (c == hole_col) {
                 color_board[BOARD_ROW - 1][c] = EMPTY_COLOR_ID; // 7 (Black)
@@ -350,7 +349,7 @@ void resolve_garbage_and_attack(
     int attackGenerated
 ) {
     if (linesCleared > 0) {
-        // 1. Cancel our own incoming garbage first (FIFO)
+        // Cancel our own incoming garbage first (FIFO)
         while (attackGenerated > 0 && !myState.incGarbage.empty()) {
             GarbagePacket& front = myState.incGarbage.front();
             if (attackGenerated >= front.lines) {
@@ -390,6 +389,22 @@ void resolve_garbage_and_attack(
     }
 }
 
+//
+// Handling
+//
+
+constexpr float DAS = 0.11f; // in ms
+constexpr float ARR = 0.0f; 
+constexpr float SDF = 200.0f; // <=0 for instant
+constexpr float GRAVITY = 1.0f;
+
+float dasTimer = 0.0f;
+float arrTimer = 0.0f;
+float gravTimer = 0.0f;
+int heldDir = 0; // for das holding. -1 left, 1 right, 0 none
+
+
+
 // -----------------------------------------------------------------------------
 // GUI CONSTANTS & HELPERS
 // -----------------------------------------------------------------------------
@@ -411,7 +426,7 @@ int row_to_py(int row) { return MARGIN_TOP + ((row - 2) * CELL_SIZE); }
 void draw_preview_piece(PieceType type, int centerX, int centerY, int cellSize, Color color) {
     const PieceData &data = PIECES[type];
 
-    // 1. Find the tight bounding box of the piece in spawn rotation (0°)
+    // Find the tight bounding box of the piece in spawn rotation (0°)
     int minC = 4, maxC = -1, minR = 4, maxR = -1;
     for (int r = 0; r < 4; r++) {
         for (int c = 0; c < 4; c++) {
@@ -424,13 +439,13 @@ void draw_preview_piece(PieceType type, int centerX, int centerY, int cellSize, 
         }
     }
 
-    // 2. Calculate pixel width/height and top-left start position
+    // Calculate pixel width/height and top-left start position
     int widthPx  = (maxC - minC + 1) * cellSize;
     int heightPx = (maxR - minR + 1) * cellSize;
     int startX   = centerX - (widthPx / 2);
     int startY   = centerY - (heightPx / 2);
 
-    // 3. Draw minos
+    // Draw minos
     for (int r = minR; r <= maxR; r++) {
         for (int c = minC; c <= maxC; c++) {
             if (data.shape[0][r] & (1 << c)) {
@@ -544,7 +559,7 @@ int main() {
         for (int c = 0; c < BOARD_COL; c++) color_board[r][c] = EMPTY_COLOR_ID;
     }
     // Set test floor at bottom visible row (row 21)
-    set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
+    // set_test_row(board, color_board, 21, 0b0001111000, TEST_COLOR_ID);
 
     PieceType holdPiece = PIECE_N; // use int now for negatives
     bool canHold = true;
@@ -601,18 +616,70 @@ int main() {
                 opponentState = AttackStatePlayer{};
             }
 
+            // das and arr
+            bool leftPress = IsKeyPressed(KEY_LEFT);
+            bool rightPress = IsKeyPressed(KEY_RIGHT);
+            bool leftDown = IsKeyDown(KEY_LEFT);
+            bool rightDown = IsKeyDown(KEY_RIGHT);
 
-
-
-            if (IsKeyDown(KEY_LEFT)) {
+            if (leftPress) {
                 if (!is_colliding(board, currentPiece, rotation, pieceX - 1, pieceY)) pieceX--;
-            }
-            if (IsKeyDown(KEY_RIGHT)) {
+                heldDir = -1;
+                dasTimer = 0.0f;
+                arrTimer = 0.0f;
+            } else if (rightPress) {
                 if (!is_colliding(board, currentPiece, rotation, pieceX + 1, pieceY)) pieceX++;
+                heldDir = 1;
+                dasTimer = 0.0f;
+                arrTimer = 0.0f;
             }
-            if (IsKeyDown(KEY_DOWN)) {
-                if (!is_colliding(board, currentPiece, rotation, pieceX, pieceY + 1)) pieceY++;
+
+            if (heldDir == -1 && !leftDown)  heldDir = rightDown ? 1 : 0;
+            if (heldDir ==  1 && !rightDown) heldDir = leftDown ? -1 : 0;
+
+            if (heldDir == 0) {
+                dasTimer = 0.0f;
+                arrTimer = 0.0f;
+            } else {
+                dasTimer += dt;
+                if (dasTimer >= DAS) {
+                    if (ARR <= 0.0f) {
+                        // 0 ARR: Instant snap to wall
+                        while (!is_colliding(board, currentPiece, rotation, pieceX + heldDir, pieceY)) {
+                            pieceX += heldDir;
+                        }
+                    } else {
+                        arrTimer += dt;
+                        while (arrTimer >= ARR) {
+                            arrTimer -= ARR;
+                            if (!is_colliding(board, currentPiece, rotation, pieceX + heldDir, pieceY)) {
+                                pieceX += heldDir;
+                            }
+                        }
+                    }
+                }
             }
+
+            // sdf and gravity logic
+            if (IsKeyDown(KEY_DOWN) && SDF == 0.0f) {
+                pieceY = get_drop_y(board, currentPiece, rotation, pieceX, pieceY);
+                gravTimer = 0.0f;
+            } else {
+                float sdfRate = IsKeyDown(KEY_DOWN) ? SDF : 1.0f;
+                gravTimer += dt * sdfRate;
+
+                while (gravTimer >= GRAVITY) {
+                    gravTimer -= gravTimer;
+                    if (!is_colliding(board, currentPiece, rotation, pieceX, pieceY + 1)) {
+                        pieceY++;
+                    } else {
+                        // add piece lock logic here
+                        break;
+                    }
+                    
+                }
+            }
+
             if (IsKeyPressed(KEY_UP)) {
                 int nextRot = (rotation + 1) % 4;
                 try_rotate(board, currentPiece, rotation, nextRot, pieceX, pieceY);
@@ -698,13 +765,13 @@ int main() {
             }
         }
 
-        // B. Draw Board Outer Border Line (Around the 20 visible rows)
+        // Draw Board Outer Border Line (Around the 20 visible rows)
         DrawRectangleLinesEx(
             Rectangle{ (float)MARGIN_LEFT, (float)MARGIN_TOP, (float)(BOARD_COL * CELL_SIZE), (float)(20 * CELL_SIZE) },
             2.0f, WHITE
         );
 
-        // C. Draw Active Falling Piece (Includes minos floating ABOVE MARGIN_TOP!)
+        // Draw Active Falling Piece
         const PieceData& activeData = PIECES[currentPiece];
         int ghostY = get_drop_y(board, currentPiece, rotation, pieceX, pieceY);
         for (int r = 0; r < 4; r++) {
@@ -723,7 +790,6 @@ int main() {
         }
 
 
-        // D. Side Info
         // DrawText("1-7: Switch Piece", MARGIN_LEFT + (BOARD_COL * CELL_SIZE) + 20, 60, 14, LIGHTGRAY);
         int totalSent = 0;
         for (const auto& p : opponentState.incGarbage) totalSent += p.lines;
